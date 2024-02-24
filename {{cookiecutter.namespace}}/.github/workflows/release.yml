@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'The environment to deploy to'
+        type: environment
+        required: false
+        default: dev
+
+jobs:
+  security_scan:
+    name: Security scan
+    uses: ./.github/workflows/security-scan.yml
+    with:
+      solution: '{{ cookiecutter.namespace }}.sln'
+
+  lint:
+    name: Infrastructure Code Standards
+    uses: clearfunction/eph-infrastructure/.github/workflows/code-standards.yml@main
+    secrets: inherit
+
+  build:
+    name: Build
+    uses: ./.github/workflows/build.yml
+    with:
+      dotnet-version: '8.0'
+      unit-test-project: 'tests/{{ cookiecutter.namespace }}.UnitTests/{{ cookiecutter.namespace }}.UnitTests.csproj'
+
+  preview:
+    name: Infrastructure Preview
+    uses: clearfunction/eph-infrastructure/.github/workflows/pulumi-action.yml@main
+    with:
+      environment: {% raw %}${{ inputs.environment }}{% endraw %}
+      action: 'preview'
+    secrets: inherit
+
+  docker:
+    name: Docker Build and Publish
+    needs:
+      - security_scan
+      - lint
+      - build
+      - preview
+    uses: clearfunction/eph-infrastructure/.github/workflows/docker.yml@main
+    with:
+      environment: {% raw %}${{ inputs.environment }}{% endraw %}
+      tag-name: {% raw %}'${{ github.repository }}:${{ github.sha }}'{% endraw %}
+    secrets: inherit
+
+  release:
+    name: Release
+    needs:
+      - docker
+    uses: clearfunction/eph-infrastructure/.github/workflows/pulumi-action.yml@main
+    with:
+      environment: {% raw %}${{ inputs.environment }}{% endraw %}
+      action: 'up'
+    secrets: inherit

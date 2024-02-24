@@ -1,0 +1,50 @@
+{
+  {%- set names = cookiecutter.namespace.split(".") %}
+  {%- set friendlyNames = cookiecutter.name.split(" ") %}
+  "version": "0.1",
+  "words": [
+    "appsettings",
+    "aspnet",
+    "hsts",
+    "nlog",
+    "serilog",
+    "xunit",
+    "shouldly",
+    "v'VVV",
+    "ClearFunction",
+    "Eph",
+    "EPH",
+    "{{cookiecutter.namespace}}",
+    {%- for item in names %}
+    "{{ item }}",
+    {%- endfor %}
+    "{{cookiecutter.name}}",
+    {%- for friendlyItem in friendlyNames %}
+    "{{ friendlyItem }}",
+    {%- endfor %}
+    "{{cookiecutter.app_service_name}}",
+    "idempotency",
+    "Newtonsoft",
+    "Cybersource",
+    "Braintree",
+    "Swashbuckle",
+    "lolol",
+    "merchantsecret",
+    "merch",
+    "Ptsv",
+    "paymentsidrefunds",
+    "paymentsidcaptures",
+    "apitest",
+    "pulumi"
+  ],
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/*.d.ts",
+    "icons.ts",
+    "**/jquery/dist/**",
+    "**/jquery-validation/**",
+    "**/jquery-validation-unobtrusive/**",
+    "**/bootstrap/dist/**",
+    "**/Migrations/**"
+  ]
+}

@@ -1,0 +1,27 @@
+name: Security Scan
+
+on:
+  workflow_call:
+    inputs:
+      solution:
+        description: 'The solution to scan'
+        type: string
+        required: true
+      output:
+        description: 'The output file'
+        type: string
+        default: 'security-scan.json'
+
+jobs:
+  security_scan:
+    name: 'Security Scan'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: '☁️ checkout repository'
+        uses: actions/checkout@v4
+
+      - name: '🕵️ Security Scan'
+        run: |
+          dotnet tool install --global security-scan
+          security-scan {% raw %}${{ inputs.solution }}{% endraw %}

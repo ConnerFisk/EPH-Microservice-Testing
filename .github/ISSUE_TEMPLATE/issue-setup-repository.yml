@@ -1,0 +1,52 @@
+name: Setup Your Repository
+description: Provide values for your cookiecutter template values
+title: "[SETUP]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Behold, you're about to embark on a fantastic voyage to set up your repository. Hold on to your butts!
+  - type: input
+    id: name
+    attributes:
+      label: Friendly Name
+      placeholder: "EPH SomeService"
+      description: |
+        This is the friendly name for your project. It will show up in the README.
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      placeholder: "This is a description of my repository"
+      description: |
+        Describe your repository here. This will be placed in the README and the Pulumi Stack description.
+    validations:
+      required: true
+  - type: input
+    id: namespace
+    attributes:
+      label: .NET Namespace (ClearFunction.Eph.)
+      placeholder: "SomeService"
+      description: |
+        This is the .NET namespace for your project. Just enter the part after "ClearFunction.Eph."
+    validations:
+      required: true
+  - type: input
+    id: app_service_name
+    attributes:
+      label: App Service Name
+      placeholder: "eph-some-service"
+      description: |
+        This name will be used in the Azure service name, the Pulumi Stack name, and the developer Docker image.
+    validations:
+      required: true
+  - type: checkboxes
+    id: features
+    attributes:
+      label: Which additional features to include support for?
+      description: Select all that apply.
+      options:
+        - label: Database
+          required: false

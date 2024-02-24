@@ -1,0 +1,161 @@
+name: Setup repository
+on:
+  issues:
+    types: [opened]
+jobs:
+  setup:
+    name: Reinitialize repository
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    env:
+      REPO_SETUP_TOKEN: ${{ secrets.REPO_SETUP_TOKEN }}
+      INCLUDE_DB: false
+    steps:
+      - name: Do not run scaffolding on template repository
+        shell: bash
+        # This workflow runs when the `cookiecutter.json` file is modified.
+        # This is the trick to re-init a repository, but we don't want to
+        # run this action if this file is modified in the origin template repository.
+        #
+        # Using the GitHub rest API allows us to identify if the current repository
+        # is a template repository or not.
+        run: |
+          curl --silent -X GET \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.baptiste-preview+json" \
+            https://api.github.com/repos/$GITHUB_REPOSITORY \
+            | jq --exit-status '.is_template == false';
+
+      - name: Add comment
+        run: gh issue comment "$NUMBER" --body "$BODY"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+          BODY: >
+            Setting up repository...
+            ![https://github.com/${{ github.repository }}/actions/workflows/setup-repository.yml](https://github.com/${{ github.repository }}/actions/workflows/setup-repository.yml/badge.svg).
+
+      - uses: actions/checkout@v4
+        with:
+          # Committing workflow files using the regular GITHUB_TOKEN will fail with
+          # `Git Error: Refusing to allow a GitHub App to create or update workflow without workflows permission`.
+          # This is by design to prevent third-parties from adding malicious workflow files.
+          #
+          # Generate a new personal access token with the workflow `scope` does the trick.
+          # Checkout my blog post https://stefanbuck.com/blog for alternative options
+          token: ${{ env.REPO_SETUP_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Parse issue form
+        uses: stefanbuck/github-issue-parser@v3
+        id: issue-parser
+        with:
+          template-path: .github/ISSUE_TEMPLATE/issue-setup-repository.yml
+
+      - name: Set include database feature flag
+        run: |
+          if echo "${{ steps.issue-parser.outputs.issueparser_features }}" | grep -q "Database"; then
+            echo "INCLUDE_DB=true" >> $GITHUB_ENV
+          fi
+
+      - name: Parse issue form json and merge in additional flags
+        run: jq '. += {"include_db":${{env.INCLUDE_DB}}, "_extensions":["cookiecutter.extensions.RandomStringExtension","cutout.Stencil"]} | .namespace = "ClearFunction.Eph." + .namespace | del(.features)' ${HOME}/issue-parser-result.json > ${HOME}/issue-parser-result.json.tmp && mv ${HOME}/issue-parser-result.json.tmp ${HOME}/issue-parser-result.json
+
+      - name: Copy over issue parser json to cookiecutter json
+        run: cp ${HOME}/issue-parser-result.json ./cookiecutter.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install dependencies
+        run: |
+          pip install cookiecutter && \
+          pip install cut-out-cookies
+
+      - name: Scaffolding repository
+        # cookiecutter is command-line utility to create projects from templates
+        # https://github.com/cookiecutter/cookiecutter
+        #
+        # --no-input      Do not prompt for parameters and only use
+        #                 cookiecutter.json file content or command line parameters
+        #
+        # --output-dir    Where to output the generated project dir into
+        run: |
+          cookiecutter . --no-input --output-dir ./cookiecutter-temp
+
+      - name: Prepare root directory
+        shell: bash
+        # Remove all files and folder expect .git/ and cookiecutter-temp/
+        run: |
+          find ./ -maxdepth 1 \
+          ! -name '.git' \
+          ! -name 'cookiecutter-temp' \
+          ! -name '.' \
+          ! -exec rm -rf {} +
+
+      - name: Move files to root
+        shell: bash
+        # The cookiecutter-temp/ folder contains a single folder which is the
+        # generated project by cookiecutter. We want to move all the project
+        # files into the root directory so we can reinitialize git in the next step
+        run: |
+          rsync -r ./cookiecutter-temp/*/ . && \
+          rm -rf ./cookiecutter-temp/
+
+      - name: Install and run csharpier auto-format
+        shell: bash
+        run: |
+          dotnet tool install -g csharpier && \
+          dotnet-csharpier .
+
+      - name: Reinitialize git repository
+        shell: bash
+        # Reinitialize git after scaffolding this repository.
+        # We use `git checkout --orphan` to create a branch in a git init-like state.
+        # By force pushing this as `main` we end up with a new clean git history.
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com" && \
+          git config --global user.name "github-actions[bot]" && \
+          git checkout --orphan temp-branch && \
+          git add . && \
+          git commit -m 'Initial commit' && \
+          git push origin temp-branch:main -f
+
+      - name: Configure Repository Defaults
+        run: |
+          # enable "Automatically delete head branches"
+          gh repo edit ${{ github.repository }} --delete-branch-on-merge
+        env:
+          GH_TOKEN: ${{ secrets.REPO_SETUP_TOKEN }}
+
+      - name: Configure default protected branches
+        # See docs for this API at https://docs.github.com/en/rest/branches/branch-protection?apiVersion=2022-11-28#update-branch-protection
+        run: |
+          curl -L \
+            -X PUT \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.REPO_SETUP_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/$GITHUB_REPOSITORY/branches/main/protection \
+              -d '{
+                  "required_status_checks":null,
+                  "enforce_admins":true,
+                  "required_pull_request_reviews":{
+                    "dismiss_stale_reviews":true,
+                    "require_code_owner_reviews":false,
+                    "required_approving_review_count":1
+                  },
+                  "restrictions":null,
+                  "required_linear_history":false}'
+
+      - name: Close issue
+        run: gh issue close "$NUMBER" --comment "$COMMENT" --reason "completed"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+          COMMENT: >
+            Repository setup complete! See
+            ![https://github.com/${{ github.repository }}/actions/workflows/setup-repository.yml](https://github.com/${{ github.repository }}/actions/workflows/setup-repository.yml/badge.svg).

@@ -1,0 +1,11 @@
+{
+  "namespace": "ClearFunction.Eph.??",
+  "name": "??",
+  "description": "??",
+  "app_service_name": "eph-??",
+  "include_db": false,
+  "_extensions": [
+    "cookiecutter.extensions.RandomStringExtension",
+    "cutout.Stencil"
+  ]
+}

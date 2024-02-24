@@ -1,0 +1,50 @@
+name: Build
+on:
+  workflow_call:
+    inputs:
+      dotnet-version:
+        description: 'dotnet version'
+        type: string
+        default: '8.0'
+      unit-test-project:
+        description: 'Unit Test project'
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: '☁️ checkout repository'
+        uses: actions/checkout@v4
+
+      - name: '🔧 setup dotnet'
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: {% raw %}${{ inputs.dotnet-version }}{% endraw %}
+
+      - name: '📦 Cache NuGet packages'
+        uses: actions/cache@v3
+        with:
+          path: ~/.nuget/packages
+          # Look to see if there is a cache hit for the corresponding requirements file
+          key: {% raw %}${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}{% endraw %}
+          restore-keys: |
+            {% raw %}${{ runner.os }}-nuget{% endraw %}
+
+      - name: '📦 Restore dependencies'
+        run: |
+          dotnet restore
+          dotnet tool restore
+
+      - name: '🔧 compile'
+        env:
+          HUSKY: 0
+        run: dotnet build
+
+      - name: '🔍 Unit Tests'
+        run: dotnet test {% raw %}${{ inputs.unit-test-project }}{% endraw %}
+        if: inputs.unit-test-project != ''
+
+      - name: '🔍 Check Formatting'
+        run: |
+          dotnet csharpier --check .

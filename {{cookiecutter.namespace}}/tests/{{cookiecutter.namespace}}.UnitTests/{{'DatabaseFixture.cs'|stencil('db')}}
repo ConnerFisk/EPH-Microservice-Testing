@@ -1,0 +1,44 @@
+using System.Diagnostics.CodeAnalysis;
+using {{cookiecutter.namespace}}.Data;
+using Microsoft.EntityFrameworkCore;
+using Testcontainers.SqlEdge;
+using Xunit;
+
+namespace {{cookiecutter.namespace}}.UnitTests;
+
+[SuppressMessage("", "CA1001", Justification = "We're disposing in IAsyncLifetime.DisposeAsync()")]
+public class DatabaseFixture : IAsyncLifetime
+{
+    private readonly SqlEdgeContainer _sql = new SqlEdgeBuilder().Build();
+
+    private ApplicationDbContext? _db;
+
+    public ApplicationDbContext Db => _db!;
+
+    public async Task InitializeAsync()
+    {
+        await _sql.StartAsync();
+
+        var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
+        optionsBuilder.UseSqlServer(_sql.GetConnectionString());
+
+        _db = new ApplicationDbContext(optionsBuilder.Options);
+
+        await _db.Database.MigrateAsync();
+    }
+
+    public async Task DisposeAsync()
+    {
+        if (_db != null)
+            await _db.DisposeAsync();
+        await _sql.DisposeAsync();
+    }
+}
+
+[CollectionDefinition("Database Collection")]
+public class DatabaseCollectionFixture : ICollectionFixture<DatabaseFixture>
+{
+    // This class has no code, and is never created. Its purpose is simply
+    // to be the place to apply [CollectionDefinition] and all the
+    // ICollectionFixture<> interfaces.
+}
